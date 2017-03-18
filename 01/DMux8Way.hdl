@@ -16,5 +16,12 @@ CHIP DMux8Way {
     OUT a, b, c, d, e, f, g, h;
 
     PARTS:
-    // Put your code here:
+    Mux8Way(a=in, sel=sel, out=a);
+  	Mux8Way(b=in, sel=sel, out=b);
+  	Mux8Way(c=in, sel=sel, out=c);
+  	Mux8Way(d=in, sel=sel, out=d);
+  	Mux8Way(e=in, sel=sel, out=e);
+  	Mux8Way(f=in, sel=sel, out=f);
+  	Mux8Way(g=in, sel=sel, out=g);
+  	Mux8Way(h=in, sel=sel, out=h);
 }

@@ -1,0 +1,25 @@
+// Chip checks for 16bit input to
+// consist of only ones.
+
+CHIP All {
+    IN in[16];
+    OUT out;
+
+    PARTS:
+    And(a=true, b=in[0], out=outA);
+    And(a=outA, b=in[1], out=outB);
+    And(a=outB, b=in[2], out=outC);
+    And(a=outC, b=in[3], out=outD);
+    And(a=outD, b=in[4], out=outE);
+    And(a=outE, b=in[5], out=outF);
+    And(a=outF, b=in[6], out=outG);
+    And(a=outG, b=in[7], out=outH);
+    And(a=outH, b=in[8], out=outI);
+    And(a=outI, b=in[9], out=outJ);
+    And(a=outJ, b=in[10], out=outK);
+    And(a=outK, b=in[11], out=outL);
+    And(a=outL, b=in[12], out=outM);
+    And(a=outM, b=in[13], out=outN);
+    And(a=outN, b=in[14], out=outO);
+    And(a=outO, b=in[15], out=out);
+}

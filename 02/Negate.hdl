@@ -1,0 +1,10 @@
+// Chip negates 16 bit signed integer
+// in 2's complement representation
+
+CHIP Negate {
+    IN in[16];
+    OUT out[16];
+
+    PARTS:
+    Not16 (in=in, out=out);
+}

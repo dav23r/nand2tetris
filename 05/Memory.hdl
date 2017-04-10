@@ -27,5 +27,17 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+
+    // Three memory interfaced devices
+    RAM16K(in=in, out=ramOut, load=ramLoad, address=address[0..13]);
+    Screen(in=in, out=screenOut, load=screenLoad, address=address[0..12]);
+    Keyboard(out=kbdOut);
+
+    // Demultiplexing load bit to RAM and SCREEN
+    DMux(a=ramLoad, b=screenLoad, sel=address[14], in=load);
+
+    // Multiplexing outputs of all three components
+    Mux4Way16(a=ramOut, b=ramOut, c=screenOut, d=kbdOut,
+              sel=address[13..14], out=out);
+
 }

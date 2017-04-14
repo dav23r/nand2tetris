@@ -6,23 +6,23 @@
 /**
  * The Hack CPU (Central Processing unit), consisting of an ALU,
  * two registers named A and D, and a program counter named PC.
- * The CPU is designed to fetch and execute instructions written in 
+ * The CPU is designed to fetch and execute instructions written in
  * the Hack machine language. In particular, functions as follows:
- * Executes the inputted instruction according to the Hack machine 
+ * Executes the inputted instruction according to the Hack machine
  * language specification. The D and A in the language specification
  * refer to CPU-resident registers, while M refers to the external
- * memory location addressed by A, i.e. to Memory[A]. The inM input 
- * holds the value of this location. If the current instruction needs 
- * to write a value to M, the value is placed in outM, the address 
- * of the target location is placed in the addressM output, and the 
- * writeM control bit is asserted. (When writeM==0, any value may 
- * appear in outM). The outM and writeM outputs are combinational: 
- * they are affected instantaneously by the execution of the current 
- * instruction. The addressM and pc outputs are clocked: although they 
- * are affected by the execution of the current instruction, they commit 
- * to their new values only in the next time step. If reset==1 then the 
- * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
- * than to the address resulting from executing the current instruction. 
+ * memory location addressed by A, i.e. to Memory[A]. The inM input
+ * holds the value of this location. If the current instruction needs
+ * to write a value to M, the value is placed in outM, the address
+ * of the target location is placed in the addressM output, and the
+ * writeM control bit is asserted. (When writeM==0, any value may
+ * appear in outM). The outM and writeM outputs are combinational:
+ * they are affected instantaneously by the execution of the current
+ * instruction. The addressM and pc outputs are clocked: although they
+ * are affected by the execution of the current instruction, they commit
+ * to their new values only in the next time step. If reset==1 then the
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather
+ * than to the address resulting from executing the current instruction.
  */
 
 CHIP CPU {
@@ -34,10 +34,71 @@ CHIP CPU {
                          // the current program (reset==0).
 
     OUT outM[16],        // M value output
-        writeM,          // Write to M? 
+        writeM,          // Write to M?
         addressM[15],    // Address in data memory (of M)
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+
+    ARegister(in=aIn, load=changeARegister, out=aOutToMuxAM, 
+        out[0..14]=addressM, out=pcIn);                    // A-register
+
+    DRegister(in=aluOut, load=loadD, out=Dout);            // D-register
+
+    PC(in=pcIn, load=pcLoad, inc=pcInc, reset=reset, 
+        out[0..14]=pc);                                    // PC chip
+
+    Mux16(a=aOutToMuxAM, b=inM, 
+             sel=instruction[12], out=MuxAMout);           // MuxAM
+
+    Mux16(a=instruction, b=aluOut, sel=instruction[15],    // MuxInCpuOut
+            out=aIn);
+
+    ALU(                                                   // ALU chip
+        x=Dout,                  // input from D register
+        y=MuxAMout,              // input from A instr / Memory
+        zx=instruction[11],      // zero x?
+        nx=instruction[10],      // negate x?
+        zy=instruction[9],       // zero y?
+        ny=instruction[8],       // negate y?
+        f=instruction[7],        // and or plus?
+        no=instruction[6],       // negate output?
+        out=outM,                // connect to main output pin
+        out=aluOut,              // for D register and muxInCpuOut
+        zr=cpuZr,                // used for PC jumping
+        ng=cpuNg                 // used for PC jumping
+    );
+
+    Not(in=instruction[15], out=Ainstruction);             // 1 if Ainstr
+
+    Or(a=Ainstruction, b=instruction[5], 
+        out=changeARegister);    // set load bit on A register
+                                 // if it's A instruction or C of 
+                                 // format A=... 
+
+    And(a=instruction[15], b=instruction[4], 
+        out=loadD);              // Load in D register if its C
+                                 // instruction and of type D=...
+
+    And(a=instruction[15], b=instruction[3],   // set write bit if it's C
+        out=writeM);                           // instr and of form M=...
+
+    Not(in=cpuZr, out=cpuNotZr); // cpu output is not zero
+    Not(in=cpuNg, out=cpuNotNg); // cpu output is not negative
+
+    And(a=cpuNotZr, b=cpuNotNg, 
+        out=cpuPos);             // cpu output is positive
+
+    And(a=instruction[2], b=cpuNg, out=JumpLess);    // cmp is less and j1
+    And(a=instruction[1], b=cpuZr, out=JumpEqual);   // cmp is equal and j2
+    And(a=instruction[0], b=cpuPos, out=JumpMore);   // cmp is more and j3
+
+    // Det. if either of conditions <, == fire and set
+    Or(a=JumpLess, b=JumpEqual, out=JumpLessOrEqual); 
+    
+    // Det. if either of conditions <, ==, > fire and set
+    Or(a=JumpLessOrEqual, b=JumpMore, out=Jumpbits);  // if any jump cndt
+    And(a=Jumpbits, b=instruction[15], out=pcLoad);   // and C instruction
+
+    Not(in=pcLoad, out=pcInc);   // Increment if not jumping (by default)
 }

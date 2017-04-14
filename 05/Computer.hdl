@@ -19,5 +19,13 @@ CHIP Computer {
     IN reset;
 
     PARTS:
-    // Put your code here:
+
+    CPU(instruction=dataFromRom, inM=dataFromRAM, reset=reset,
+        outM=dataToRam, writeM=writeToRam, addressM=addrInRam,
+        pc=addrToRom);
+
+    ROM(address=addrToRom, out=dataFromRom);
+
+    RAM(in=dataToRam, load=writeToRam, 
+        address=addrInRam, out=dataFromRAM);
 }

@@ -24,8 +24,8 @@ CHIP Computer {
         outM=dataToRam, writeM=writeToRam, addressM=addrInRam,
         pc=addrToRom);
 
-    ROM(address=addrToRom, out=dataFromRom);
+    ROM32K(address=addrToRom, out=dataFromRom);
 
-    RAM(in=dataToRam, load=writeToRam, 
-        address=addrInRam, out=dataFromRAM);
+    Memory(in=dataToRam, load=writeToRam, 
+            address=addrInRam, out=dataFromRAM);
 }

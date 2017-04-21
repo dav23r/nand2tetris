@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+import sys 
+import textwrap as tw
+
+''' Stores command properties '''
+class Command(object):
+    
+    def __init__(self, token):
+        if len(token) == 0:
+            self.valid = False
+            return
+        if token[0] == '@':
+            self.type = 'A'
+            self.symbol = token[1:]
+        elif token[0] == '(':
+            self.type = 'L'
+            self.symbol = token[1:-1]
+        else:
+            self.type= 'C'
+            self.symbol = token
+            # dest = comp; jmp
+            equals_i, semicol_i = token.find('='), token.find(';')
+            if semicol_i == -1: semicol_i = len(token)
+            self.dest = token[:max(equals_i,0)].strip()
+            self.comp = token[equals_i + 1: semicol_i].strip()
+            self.jump = token[semicol_i + 1:].strip()
+        self.valid = True
+
+
+''' Parser class '''
+class Parser(object):
+
+    def __init__(self, file_stream):
+        self.stream = file_stream
+        self.curCommand = None
+        self.nextCommand = self._getNextCommand()
+
+    def hasMoreCommands(self):
+        ''' Are there any more commands? '''
+        return self.nextCommand.valid
+        
+    def _getNextCommand(self):
+        stream = self.stream
+        while True:
+            line = stream.readline()
+            if line == '':
+                return Command('') # Empty command
+            line = line.strip()
+            comment_index = line.find ('//')
+            if comment_index != -1:
+                line = line[:comment_index]
+            if line != '':
+                break
+        return Command(line)
+        
+    def advance(self):
+        ''' 
+            Reads the next command from input
+            and makes it current command. Should
+            be called only if 'hasMoreCommands'
+        '''
+        self.curCommand = self.nextCommand
+        self.nextCommand = self._getNextCommand()
+
+    def commandType(self):
+        ''' Returns one of the types for current command '''
+        return self.curCommand.type
+
+    def symbol(self):
+        ''' Returns decimal repr for A or symbol for L command '''
+        return self.curCommand.symbol
+
+    def dest(self):
+        ''' Returns dest mnemonic. Should be called on C command only '''
+        return self.curCommand.dest
+
+    def comp(self):
+        ''' Returns comp mnemonic of C instruction '''
+        return self.curCommand.comp
+
+    def jump(self):
+        ''' Returns jump mnemonic of C instruction '''
+        return self.curCommand.jump
+
+
+''' Class consists of static methods for translating 
+    mnemonics into corresponding bit representations '''
+class Code(object):
+    
+    comp_dict = {
+        '0' : '101010',
+        '1' : '111111',
+       '-1' : '111010',
+        'D' : '001100',
+        'A' : '110000',
+       '!D' : '001101',
+       '!A' : '110001',
+       '-D' : '001111',
+       '-A' : '110011',
+      'D+1' : '011111',
+      'A+1' : '110111',
+      'D-1' : '001110',
+      'A-1' : '110010',
+      'D+A' : '000010',
+      'D-A' : '010011',
+      'A-D' : '000111',
+      'D&A' : '000000',
+      'D|A' : '010101'
+    }
+
+    jump_dict = {
+        ''      : '000',
+        'JGT'   : '001',
+        'JEQ'   : '010',
+        'JGE'   : '011',
+        'JLT'   : '100',
+        'JNE'   : '101',
+        'JLE'   : '110',
+        'JMP'   : '111'
+    }
+
+    @staticmethod
+    def dest(mnemonic):
+        ''' Returns bit representation of dest mnemonic '''
+        bits = ['0'] * 3
+        chars = 'ADM'
+        for i, ch in enumerate(chars):
+            if ch in mnemonic:
+                bits[i] = '1'
+        return ''.join(bits)
+        
+
+    @staticmethod
+    def comp(mnemonic):
+        ''' Returns bit representation of comp mnemonic '''
+        if 'M' in mnemonic:
+            a = '1'
+            mnemonic = mnemonic.replace('M', 'A')
+        else:
+            a = '0'
+        return a + Code.comp_dict[mnemonic]
+
+    @staticmethod
+    def jump(mnemonic):
+        ''' Returns bit representation of jump mnemonic '''
+        return Code.jump_dict[mnemonic]
+
+    @staticmethod
+    def tobin(addr):
+        ''' Returns addr represented in binary string '''
+        addr = bin(int(addr))
+        return addr[2:].zfill(15)
+
+        
+
+''' Encapsulates symbols storing and resolving logic '''
+class SymbolTable(object):
+
+    def __init__(self):
+        self.table = {
+            'SP'    : 0,
+            'LCL'   : 1,
+            'ARG'   : 2,
+            'THIS'  : 3,
+            'THAT'  : 4,
+            'SCREEN': 16384,
+            'KBD'   : 24576,
+        }
+        for i in range(16):
+            self.table['R' + str(i)] = i
+
+    def addEntry(self, symbol, address):
+        ''' Add (symbol -> address) to table '''
+        assert (symbol not in self.table)
+        self.table[symbol] = address
+
+    def contains(self, symbol):
+        ''' Does table containg given symbol? '''
+        return symbol in self.table
+
+    def getAddress(self, symbol):
+        assert (symbol in self.table)
+        return Code.tobin(self.table[symbol])
+
+''' If called by name from cli assemble hack file from asm '''
+if __name__ == '__main__':
+
+    if len(sys.argv) < 2:
+        print ( 
+                tw.dedent(
+                '''
+                    [Python assembler]
+                    Usage:   > ./Assembler file1.asm file2.asm ...
+                    Output:  file1.hack file2.hack ...
+                '''
+                )
+              )
+        exit(1) # Exit with nonzero error code
+
+    # Iterate over files and assemble each
+    for filename in sys.argv[1:]:
+        # Name of new hack file
+        basename = filename
+        if basename.endswith('.asm'):
+            basename = basename[:-4]
+        basename += '.hack'
+        print ('[Python assembler]: Assembling ' + basename)
+        # Table for storing symbols
+        st = SymbolTable()
+
+        # Set up symbol table on the first pass
+        with open(filename, 'r') as f:
+            parser = Parser(f)
+            line_num = 0
+            while parser.hasMoreCommands():
+                parser.advance()
+                if parser.commandType() == 'L':
+                    st.addEntry(parser.symbol(), line_num)
+                else:
+                    line_num += 1
+                    
+        # Second pass to generate actual binary commands
+        with open(filename, 'r') as f:
+            with open(basename, 'w') as b:
+
+                parser = Parser(f)
+                freeMemoryAdd = 16
+                while parser.hasMoreCommands():
+                    parser.advance()
+                    if parser.commandType() == 'A':
+                        if parser.symbol()[0].isalpha():
+                            if st.contains(parser.symbol()):
+                                binaryCommand = st.getAddress(parser.symbol())
+                            else:
+                                st.addEntry(parser.symbol(), freeMemoryAdd)
+                                binaryCommand = st.getAddress(parser.symbol()) 
+                                freeMemoryAdd += 1
+                        else:
+                            binaryCommand = Code.tobin(parser.symbol())
+                        binaryCommand = '0' + binaryCommand
+                        print (binaryCommand, file=b)
+                    elif parser.commandType() == 'C':
+                        binaryCommand = '111' + \
+                                        Code.comp(parser.comp()) + \
+                                        Code.dest(parser.dest()) + \
+                                        Code.jump(parser.jump())
+                        print (binaryCommand, file=b)
+                    elif parser.commandType() == 'L': 
+                        pass
+                    else:
+                        raise(Exception("Unknown command type from parser" + \
+                                parser.commandType()))
+                
+                        
+

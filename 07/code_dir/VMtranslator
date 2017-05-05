@@ -1,0 +1,371 @@
+#!/usr/bin/python3
+
+import textwrap as tw
+import sys
+import os
+
+class Command(object):
+
+    def __init__(self, line):
+        if len(line) == 0:
+            self.valid = False
+            return 
+
+        self.valid = True
+        tokens = line.split()
+        if len(tokens) == 1:
+            self.type = 'C_ARITHMETIC'
+            self.arg1 = tokens[0]
+        elif len(tokens) == 3:
+            if tokens[0] == 'push':
+                self.type = 'C_PUSH'
+            elif tokens[0] == 'pop':
+                self.type = 'C_POP'
+            self.arg1 = tokens[1] 
+            self.arg2 = tokens[2]
+        else:
+            raise(Exception("Unknown command content"))
+        
+
+class Parser(object):
+    
+    def __init__(self, filestream):
+        self.stream = filestream
+        self.curCommand = None
+        self.nextCommand = self._getNextCommand()
+
+    def hasMoreCommands(self):
+        ''' Are there any more commands? '''
+        return self.nextCommand.valid
+
+    def _getNextCommand(self):
+        stream = self.stream
+        while True:
+            line = stream.readline()
+            if line == '':
+                return Command('') # Empty command
+            line = line.strip()
+            comment_index = line.find ('//')
+            if comment_index != -1:
+                line = line[:comment_index]
+            if line != '':
+                break
+        return Command(line)   
+
+    def advance(self):
+        ''' 
+            Reads the next command from input
+            and makes it current command. Should
+            be called only if 'hasMoreCommands'
+        '''
+        self.curCommand = self.nextCommand
+        self.nextCommand = self._getNextCommand()
+
+    def commandType(self):
+        return self.curCommand.type
+
+    def getArg1(self):
+        return self.curCommand.arg1
+
+    def getArg2(self):
+        return self.curCommand.arg2
+
+    
+
+class CodeWriter(object):
+
+    segment_symbols = {
+        'local' : 'LCL',
+        'argument' : 'ARG',
+        'this' : 'THIS',
+        'that' : 'THAT',
+    }
+
+    segment_addrs = {
+        'pointer' : '3',
+        'temp' : '5'
+    }
+
+    instructions = {
+
+        'add' : 
+            ['@SP',
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=D+M',
+             '@SP',
+             'A=M-1',
+             'M=D'],
+
+        'eq' :
+            ['@SP',   
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=D-M',
+             '@ELSE{0}',
+             'D; JEQ',
+             '@SP',
+             'A=M-1',
+             'M=0',
+             '@ENDELSE{0}',
+             '0; JMP',
+             '(ELSE{0})',
+             '@SP',
+             'A=M-1',
+             'M=-1',
+             '(ENDELSE{0})'
+            ],
+
+        'lt' :
+            ['@SP',   
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=D-M',
+             '@ELSE{0}',
+             'D; JGT',
+             '@SP',
+             'A=M-1',
+             'M=0',
+             '@ENDELSE{0}',
+             '0; JMP',
+             '(ELSE{0})',
+             '@SP',
+             'A=M-1',
+             'M=-1',
+             '(ENDELSE{0})'
+            ],
+
+        'gt' :
+            ['@SP',   
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=D-M',
+             '@ELSE{0}',
+             'D; JLT',
+             '@SP',
+             'A=M-1',
+             'M=0',
+             '@ENDELSE{0}',
+             '0; JMP',
+             '(ELSE{0})',
+             '@SP',
+             'A=M-1',
+             'M=-1',
+             '(ENDELSE{0})'
+            ],
+
+        'sub' : 
+            ['@SP',
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=M-D',
+             '@SP',
+             'A=M-1',
+             'M=D'],
+
+        'neg' :
+            ['@SP',
+             'A=M',
+             'A=A-1',
+             'M=-M'],
+
+        'not' :
+            ['@SP',
+             'A=M',
+             'A=A-1',
+             'M=!M'],
+
+        'and' : 
+            ['@SP',
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=D&M',
+             '@SP',
+             'A=M-1',
+             'M=D'],
+
+        'or' :
+            ['@SP',
+             'M=M-1',
+             'A=M',
+             'D=M',
+             'A=A-1',
+             'D=D|M',
+             '@SP',
+             'A=M-1',
+             'M=D'],
+
+        'C_PUSH' : 
+            ['@SP',
+             'M=M+1',
+             'A=M-1',
+             'M=D'],
+
+        'C_POP' :
+            ['@SP',
+             'M=M-1',
+             'A=M',
+             'D=M']
+    }
+
+    for c in instructions:
+        instructions[c] = '\n'.join(instructions[c]) + '\n'
+
+    def __init__(self, outstream):
+        self.outstream = outstream
+        self.labelCounter = 0
+        
+    def setFileName(self, newName):
+        ls = newName.split('/')
+        self.filename = ls[-1]
+
+    def writeArithmetics(self, command):
+        out = CodeWriter.instructions[command]
+        if command in ['gt', 'lt', 'eq']:
+            out = out.format(self.labelCounter)
+            self.labelCounter += 1
+        self.outstream.write(out)
+
+    def writePushPop(self, command, segment, index):
+        genericInstr = CodeWriter.instructions[command]
+        if command == 'C_PUSH':
+            if segment == 'constant':
+                add = '@' + index + '\n'
+                add += 'D=A\n'
+            else:
+                add = ''
+                if segment in CodeWriter.segment_symbols:
+                    add += '@' + CodeWriter.segment_symbols[segment] + '\n'
+                    add += 'D=M\n'
+                elif segment in CodeWriter.segment_addrs:
+                    add += '@' + CodeWriter.segment_addrs[segment] + '\n'
+                    add += 'D=A\n'
+                elif segment == 'static':
+                    add += '@' + self.filename + '.' + index + '\n'
+                    add += 'D=A\n'
+                add += '@' + index + '\n'
+                add += 'D=D+A\n'
+                add += 'A=D\n'
+                add += 'D=M\n'
+            out = add + genericInstr
+        elif command == 'C_POP':
+            add = '@R13\n'
+            add += 'M=D\n'
+            if segment in CodeWriter.segment_symbols:
+                add += '@' + CodeWriter.segment_symbols[segment] + '\n'
+                add += 'D=M\n'
+            elif segment in CodeWriter.segment_addrs:
+                add += '@' + CodeWriter.segment_addrs[segment] + '\n'
+                add += 'D=A\n'
+            elif segment == 'static':
+                add += '@' + self.filename + '.' + index + '\n'
+                add += 'D=A\n'
+            add += '@' + index + '\n'
+            add += 'D=D+A\n'
+            add += '@R14\n'
+            add += 'M=D\n'
+            add += '@R13\n'
+            add += 'D=M\n'
+            add += '@R14\n'
+            add += 'A=M\n'
+            add += 'M=D\n'
+            out = genericInstr + add
+        else:
+            raise(Exception("Neither push nor pop in 'writePushPop'"))
+        self.outstream.write(out)
+
+    def close(self):
+        self.outstream.close()
+
+    def writeInit(self):
+        startup = [
+            '@256',
+            'D=A',
+            '@SP',
+            'M=D',
+        ]
+
+        self.outstream.write( '\n'.join(startup) + '\n' )
+            
+
+    def finalize(self):
+        final = [
+            '(TERM)',
+            '@TERM',
+            '0; JMP'
+        ]
+        
+        self.outstream.write ( '\n'.join(final) + '\n' )
+            
+
+
+def echoHelp():
+    print (
+            tw.dedent(
+            '''
+                # Provide single vm file #
+                Usage:   > ./VMtranslator file.vm
+                Output:  file.asm
+
+                # Or provide directory containing vm files #
+                Usage:   > ./VMtranslator dir
+                Output:  dir/file1.asm dir/file2.asm ...
+            '''
+            )
+          )
+    exit(1) # Exit with non-zero status
+
+def getFiles(arg):
+    files = []
+    if arg.endswith('.vm'):
+        files.append(arg)
+        resFile = arg[:-3] + '.asm'
+    elif os.path.isdir():
+        for filename in os.listdir(arg):
+            if filename.endswith('.vm'):
+                files.append(filename)
+        resFile = arg
+    return (files, resFile)
+
+if __name__ == '__main__':
+    print ("[Python VMtranslator]")
+    numArgs = len(sys.argv)
+    if numArgs != 2:
+        echoHelp()         
+
+    files, resName = getFiles(sys.argv[1])
+    if len(files) == 0:
+        echoHelp()
+
+    codeWriter = CodeWriter(open(resName, 'w'))
+    codeWriter.writeInit()
+    for fileName in files:
+        print ("Processing {0}".format(fileName))
+        with open(fileName, 'r') as f:
+            codeWriter.setFileName(fileName)
+            parser = Parser(f)
+            while parser.hasMoreCommands():
+                parser.advance()
+                if parser.commandType() == 'C_ARITHMETIC':
+                    codeWriter.writeArithmetics(parser.getArg1())    
+                elif parser.commandType() in ['C_PUSH', 'C_POP']:
+                    codeWriter.writePushPop(parser.commandType(), \
+                                            parser.getArg1(), parser.getArg2())
+                else:
+                    raise(Exception("Parser returns unknowk command type"))
+    codeWriter.finalize()
+    codeWriter.close()
+                
+            

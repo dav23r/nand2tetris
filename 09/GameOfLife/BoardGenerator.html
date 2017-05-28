@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title> Board Generator </title>
+    </head>
+    <body>
+        <div id="title">
+            <h1 style="text-align:center">
+                Game Of Life
+                <a target="_blank" href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"> [Wiki] </a>
+            </h1>
+        </div>
+        <div style="text-align:center">
+            <form id="dimensions">
+                <input required="true" placeholder="x-dimension" type="number" id="xcoord">
+                <input required="true" placeholder="y-dimension" type="number" id="ycoord">
+                <button type="button" id="resize"> Create board </button> 
+            </form>
+        </div>
+        <div id="boarddiv" width="100%" style="margin:20px">
+        </div>
+        <div id="output" style="margin:20px">
+            <textarea readonly="readonly" style="width:100%" id="code"
+                placeholder="Generated input will appear here" rows="4" cols="60"></textarea>
+        </div>
+        <div style="text-align:center">
+            <button type="button" id="generate" style="margin:auto"> Generate input for Game of Life  </button>
+        </div>
+        <script type="text/javascript">
+            
+            const maxDim = 200
+            const minDim = 10
+
+            insideInterval = (coord) => (coord >= minDim && coord <= maxDim)
+            getColor = (flag) => (flag ? "black" : "white")
+
+            function initBoard(x, y) {
+                let _board = new Array(x);
+                for (let i=0; i<x; i++) {
+                    _board[i] = new Array(y);
+                    for (let j=0; j<y; j++) {
+                        _board[i][j]=false;
+                    }
+                }
+                return _board;
+            }
+
+            function displayBoard(){
+                let table = '<table border=1 cellspacing=0 style="margin:auto">'
+                let i, j, color
+                const tableWidth = 500
+                const tableHeight = 500               
+                const cellWidth = Math.round(tableWidth / board.length)
+                const cellHeight = Math.round(tableHeight / board[0].length)
+                for (i = 0; i < board[0].length; i++){
+                    table += '<tr>'
+                    for (j = 0; j < board.length; j++){
+                        color = getColor(board[j][i])
+                        table += '<td onclick="cellClicked(this)" id=' + 
+                                 (i*board.length + j) + ' width=' + cellWidth + '  height=' + cellHeight + ' bgcolor=' + color + '></td>'
+                    }
+                    table += '</tr>'
+                }
+                document.getElementById('boarddiv').innerHTML = table
+            }
+
+            function redrawBoard(){
+                let newX = document.getElementById("xcoord").value
+                let newY = document.getElementById("ycoord").value
+                if (!insideInterval(newX) || !insideInterval(newY)){
+                    alert ("Wrong dimensions given :( Both shoul be in [10; 200]")
+                    return
+                }
+                window.board = initBoard(newX, newY)
+                displayBoard()
+            }
+
+            function cellClicked(cell){
+                console.log ('You clicked cell with id ' + cell.id)
+                let x = cell.id / board.length |0
+                let y = cell.id - board.length * x
+                board[x][y] = !board[x][y]
+                cell.style.backgroundColor = getColor(board[x][y])
+            }
+
+            function delayed(){
+                let resizeButton = document.getElementById("resize")
+                let generateButton = document.getElementById("generate")
+                resizeButton.addEventListener('click', redrawBoard)
+                generateButton.addEventListener('click', generateInput)
+            }
+
+            function generateInput(){
+                if (window.board == undefined){
+                    alert ("Create board first!")
+                    return
+                }
+                let x = board.length
+                let y = board[0].length
+                res = []
+                res.push( '[' + x + ' ' + y + ']' )
+                for (let i=0; i<x; i++)
+                    for (let j=0; j<y; j++)
+                        if (board[i][j])
+                            res.push( '(' + i + ' ' + j + ')' )
+                
+                let codeField = document.getElementById("code")
+                codeField.value = res.join(' ')
+            }
+
+            window.onload = delayed
+
+        </script>
+    </body>
+</html>

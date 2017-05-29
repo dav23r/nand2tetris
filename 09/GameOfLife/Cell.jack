@@ -1,0 +1,27 @@
+
+class Cell {
+    field int x;
+    field int y;
+    field boolean on;
+
+    constructor Cell new(int x, int y) {
+        let x = x;
+        let y = y;
+        return this;
+    }
+
+    method void turnOn(){
+        do switch(true);
+        return;
+    }
+
+    method void turnOff(){
+        do switch(false);
+        return;
+    }
+
+    method void switch(int state){
+        return;
+    }
+    
+}

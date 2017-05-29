@@ -1,6 +1,182 @@
 
 class Main {
+
     function void main(){
+        var String initBoardString; var Parser parser;
+        var String token; var Array starts;
+        var Array ends; var Array coords;
+        var int xdimension; var int ydimension;
+        var Array board, tmp;
+        var int i; var int j;
+        var int cWidth, cHeight;
+
+        let starts = Array.new(2);
+        let ends = Array.new(2);
+        let starts[0] = "["; let ends[0] = "]";
+        let starts[1] = "("; let ends[1] = ")";
+
+        let initBoardString = Keyboard.readLine("Enter configuration: ");
+        let parser = Parser.new(initBoardString, starts, ends, 2);
+
+        do parser.hasNext();
+        let token = parser.next();
+        let coords = Main.getCoords(token);
+        let xdimension = coords[0];
+        let ydimension = coords[1];
+        do coords.dispose();
+        let cWidth = 512 / xdimension;
+        let cHeight = 256 / ydimension;
+        
+        let board = Main.initBoard(xdimension, ydimension);
+
+        while (parser.hasNext()){
+            let token = parser.next();
+            let coords = Main.getCoords(token);
+            do Main.markBoard(board, coords[0], coords[1]);
+            do coords.dispose();
+            do token.dispose();
+        }
+        
+        while (true){
+            do Screen.clearScreen();
+            do Main.displayBoard(board, cWidth, cHeight, xdimension, ydimension); 
+            let tmp = Main.nextState(board, xdimension, ydimension);
+            do board.dispose();
+            let board = tmp;
+            do Sys.wait(10000);
+        }
+
+        do starts.dispose();
+        do ends.dispose();
+        do initBoardString.dispose();
         return;
     }
+
+    function Array initBoard(int xdimension, int ydimension){
+        var int i, j;
+        var Array tmp;
+        var Array board;
+
+        let board = Array.new (xdimension);
+
+        let i = 0;
+        while (i < xdimension){
+            let board[i] = Array.new(ydimension);
+            let tmp = board[i];
+            let j = 0;
+            while (j < ydimension){
+                let tmp[j] = false; 
+                let j = j + 1;
+            }
+            let i = i + 1;
+        }
+        return board;
+    }
+
+    function void displayBoard(Array board, int cWidth, int cHeight, int xdimension, int ydimension){
+        var Array tmp;
+        var int i; var int j;
+        var int margin;
+
+        let margin = cWidth / 15;
+        let i = 0;
+        while (i < xdimension){
+            let tmp = board[i];
+            let j = 0;
+            while (j < ydimension){
+                if (tmp[j] = true){
+                    do Screen.drawRectangle(i * cWidth + margin, j * cHeight + margin, 
+                        (i + 1) * cWidth - margin, (j + 1) * cHeight - margin);
+                }
+                let j = j + 1;
+            }
+            let i = i + 1;
+        }
+        return;
+    }
+
+    function Array nextState(Array board, int xdimension, int ydimension){
+        var Array tmp;
+        var Array newBoard;
+        var int i; var int j;
+        var int dx, dy;
+        var int aliveNum;
+        var boolean isAlive;
+
+        
+        let newBoard = Main.initBoard(xdimension, ydimension);
+
+        let i = 0;
+        while (i < xdimension){
+            let j = 0;
+            while (j < ydimension){
+                let aliveNum = 0;
+                let dx = -1;
+                while (dx < 2){
+                    let dy = -1;
+                    while (dy < 2){
+                        if ( ( (~((dx = 0) & (dy = 0))) & 
+                              (Main.inRange(i + dx, xdimension) & 
+                               Main.inRange(j + dy, ydimension))) ){
+                            let tmp = board[i + dx];
+                            if (tmp[j + dy]){
+                                let aliveNum = aliveNum + 1;
+                            }
+                        }
+                        let dy = dy + 1;
+                    }
+                    let dx = dx + 1;
+                }
+                let tmp = board[i];
+                let isAlive = tmp[j];
+                if ( (isAlive & ((aliveNum = 2) | (aliveNum = 3))) | ((~isAlive) & (aliveNum = 3)) ){
+                    let tmp = newBoard[i];
+                    let tmp[j] = true;
+                }
+                let j = j + 1;
+            }
+            let i = i + 1;
+        }
+
+        return newBoard;
+    }
+
+    function boolean inRange(int x, int max){
+        if (x < 0){
+            return false;
+        }
+        if (x > (max - 1)){
+            return false;
+        }
+        return true;
+    }
+
+    function void markBoard(Array board, int x, int y){
+        var Array tmp;
+        let tmp = board[x];
+        let tmp[y] = true;
+        do Output.printInt(x);
+        do Output.printInt(y);
+        return;
+    }
+
+    function Array getCoords(String tuple){
+        var Array res;
+        var int spaceIndex;
+        var String tmp;
+        var char ch;
+
+        let res = Array.new(2);
+        let tmp = " "; let ch = tmp.charAt(0);
+        let spaceIndex = Parser.indexOf(tuple, ch, 0);
+
+        let tmp = Parser.slice(tuple, 0, spaceIndex);
+        let res[0] = tmp.intValue();
+
+        let tmp = Parser.slice(tuple, spaceIndex + 1, tuple.length());
+        let res[1] = tmp.intValue();
+
+        return res;
+    }
+
 }

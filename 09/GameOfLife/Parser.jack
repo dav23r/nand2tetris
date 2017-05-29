@@ -1,0 +1,87 @@
+
+class Parser {
+    field String stream;
+    field int position;
+    field String nextToken;
+    field Array startChars;
+    field Array endChars;
+    field int inf;
+    field int arrLength;
+
+    constructor Parser new(String str, Array startsCh, Array endsCh, int length){
+        let inf = 10000;
+        let stream = str;
+        let position = 0;
+        let nextToken = null;
+        let startChars = startsCh;
+        let endChars = endsCh;
+        let arrLength = length;
+        return this;
+    }
+
+    method boolean hasNext(){
+        var int startIndex;
+        var int endIndex;
+        var int starterIndex;
+        var int i;
+        var int startOfCur;
+        var char ch;
+        var String tmp;
+
+        let startIndex = inf;
+        let i = 0;
+        while (i < arrLength){
+            let tmp = startChars[i];
+            let ch = tmp.charAt(0); 
+            let startOfCur = Parser.indexOf(stream, ch, position);
+            if ((~(startOfCur = -1)) & (startOfCur < startIndex)){
+                let startIndex = startOfCur;
+                let starterIndex = i;
+            }
+            let i = i + 1;
+        }
+
+        if (startIndex = inf) {
+            return false;
+        }
+
+        let tmp = endChars[starterIndex];
+        let ch = tmp.charAt(0);
+        let endIndex = Parser.indexOf(stream, ch, startIndex + 1);
+        if (endIndex = -1) {
+            return false;
+        }
+
+        let nextToken = Parser.slice(stream, startIndex + 1, endIndex);
+        let position = endIndex + 1;
+        return true;        
+    }
+    
+    function String slice(String base, int start, int end) {
+        var String res;
+        let res = String.new(end - start);
+        while (~(start = end)){
+            do res.appendChar(base.charAt(start));
+            let start = start + 1;
+        }
+        return res;
+    }
+
+    function int indexOf(String base, char ch, int startFrom){
+        var int i;
+
+        let i = startFrom;
+        while (i < base.length()){
+            if (base.charAt(i) = ch){
+                return i;
+            }
+            let i = i + 1;
+        }
+        return -1;
+    }
+
+    method String next(){
+        return nextToken;
+    }
+
+}
